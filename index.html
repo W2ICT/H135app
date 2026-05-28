@@ -65,6 +65,7 @@
 </head>
 <body class="bg-slate-50 min-h-screen">
 
+  <!-- Login Overlay -->
   <div id="loginOverlay" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900 bg-opacity-90 p-4">
     <div class="bg-white rounded-2xl shadow-2xl p-6 sm:p-8 w-full max-w-md text-center transform transition-all">
       <div class="w-16 h-16 sm:w-20 sm:h-20 bg-blue-700 rounded-full flex items-center justify-center mx-auto mb-4 text-white shadow-lg">
@@ -81,10 +82,13 @@
     </div>
   </div>
 
+  <!-- App Wrapper -->
   <div id="app" class="hidden flex h-screen overflow-hidden">
     
+    <!-- Sidebar Overlay (Mobile) -->
     <div id="sidebarOverlay" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/50 z-40 lg:hidden hidden"></div>
     
+    <!-- Sidebar -->
     <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 bg-slate-900 text-slate-300 transform -translate-x-full lg:translate-x-0 border-r border-slate-800 shadow-2xl lg:shadow-none">
       <div class="flex flex-col h-full">
         <div class="p-6 text-white font-bold text-xl flex items-center justify-between border-b border-slate-800">
@@ -130,8 +134,10 @@
       </div>
     </aside>
 
+    <!-- Main Content Area -->
     <main id="main-area" class="flex-grow flex flex-col min-w-0 lg:ml-64 bg-slate-50 overflow-y-auto transition-all duration-300">
       
+      <!-- Top Header -->
       <header class="bg-white/80 backdrop-blur-md shadow-sm px-4 sm:px-6 py-3 flex justify-between items-center sticky top-0 z-40 border-b border-slate-200">
         <div class="flex items-center gap-3 sm:gap-4">
           <button onclick="toggleSidebar()" class="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors z-[60]" title="สลับการแสดงผลเมนู">
@@ -149,8 +155,10 @@
         </div>
       </header>
 
+      <!-- Content -->
       <div class="p-3 sm:p-6 space-y-4 max-w-6xl mx-auto w-full">
         
+        <!-- Search Bar (Compact) -->
         <div id="searchContainer" class="bg-white p-2 rounded-xl shadow-sm border border-slate-100">
           <div class="relative">
             <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
@@ -160,6 +168,7 @@
           </div>
         </div>
 
+        <!-- Data Table View -->
         <div id="view-data" class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
           <div class="overflow-x-auto no-scrollbar">
             <table class="minimal-table" id="dataTable">
@@ -172,11 +181,12 @@
                 </tr>
               </thead>
               <tbody id="resultsTableBody">
-                </tbody>
+              </tbody>
             </table>
           </div>
         </div>
 
+        <!-- No Data State -->
         <div id="emptyState" class="hidden py-16 text-center">
           <div class="bg-slate-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -187,6 +197,7 @@
         </div>
       </div>
 
+      <!-- Footer -->
       <footer class="mt-auto py-5 border-t border-slate-100 text-center text-slate-400 text-[8px] sm:text-[9px] bg-white tracking-[0.2em] uppercase font-light">
         &copy; 2024 H135 T3H, RTAF. All Rights Reserved. <br class="sm:hidden"> <span class="hidden sm:inline">|</span> <span class="text-blue-700 font-bold ml-1">SCHOLAR</span>
       </footer>
@@ -277,7 +288,7 @@
       performSearch(false); 
     }
 
-    // ฟังก์ชันเชื่อมต่อดึงข้อมูลผ่าน APIภายนอก (Fetch API)
+    // ฟังก์ชันเชื่อมต่อดึงข้อมูลผ่านระบบ Dual-Mode (Fetch API และ google.script.run Fallback)
     function refreshData() {
       Swal.fire({
         title: 'กำลังเชื่อมต่อฐานข้อมูล...',
@@ -286,22 +297,92 @@
         customClass: { popup: 'rounded-2xl' }
       });
 
-      fetch(API_URL)
-        .then(response => response.json())
-        .then(res => {
+      // ตรวจสอบสภาพแวดล้อม: หากรันอยู่ภายใน Google Apps Script Web App ให้ดึงข้อมูลแบบตรง
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run.withSuccessHandler(res => {
           Swal.close();
           if (res.error) {
-            Swal.fire('Error', res.error, 'error');
+            showErrorDetail('ข้อผิดพลาดจากแอปหลังบ้าน', res.error);
             return;
           }
           rawData = res;
           navigate(currentPage);
         })
-        .catch(err => {
+        .withFailureHandler(err => {
           Swal.close();
-          Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถเชื่อมต่อ API ได้ กรุณาตรวจสอบการตั้งค่า CORS หรือ Deployment', 'error');
-          console.error(err);
-        });
+          showApiErrorGuide(err);
+        })
+        .getFullData();
+      } else {
+        // หากเปิดผ่าน GitHub Pages หรือเซิร์ฟเวอร์ภายนอก ให้ดึงข้อมูลผ่าน API URL (Fetch API)
+        fetch(API_URL)
+          .then(response => {
+            if (!response.ok) {
+              throw new Error('HTTP Status ' + response.status + ' (การเข้าถึงถูกปฏิเสธ)');
+            }
+            return response.json();
+          })
+          .then(res => {
+            Swal.close();
+            if (res.error) {
+              showErrorDetail('API หลังบ้านแจ้งข้อผิดพลาด', res.error);
+              return;
+            }
+            rawData = res;
+            navigate(currentPage);
+          })
+          .catch(err => {
+            Swal.close();
+            showApiErrorGuide(err);
+          });
+      }
+    }
+
+    // แสดงรายละเอียดของ Error ทั่วไป
+    function showErrorDetail(title, errorDetail) {
+      Swal.fire({
+        icon: 'error',
+        title: title,
+        text: String(errorDetail),
+        confirmButtonColor: '#1e3a8a',
+        confirmButtonText: 'ตกลง',
+        customClass: { popup: 'rounded-2xl' }
+      });
+    }
+
+    // กล่องแจ้งเตือนพร้อมขั้นตอนสืบหาสาเหตุและแก้ไขปัญหา CORS / Deployment
+    function showApiErrorGuide(err) {
+      Swal.fire({
+        icon: 'error',
+        title: 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้',
+        html: `
+          <div class="text-left text-xs space-y-2.5 mt-2 p-3 bg-slate-50 rounded-xl border border-slate-200 overflow-y-auto max-h-[300px]">
+            <p class="text-red-500 font-bold">สาเหตุหลักที่เป็นไปได้:</p>
+            <ul class="list-decimal pl-4 space-y-1.5 text-slate-600">
+              <li><b>สิทธิ์ผู้เข้าใช้งาน (CORS Blocked):</b> ตอนตั้งค่า Deploy เว็บแอปพลิเคชัน คุณต้องเลือกหัวข้อ <b>"Who has access"</b> เป็น <b>"Anyone" (ทุกคน)</b> เสมอ หากเลือก Anyone with Google account ระบบของเบราว์เซอร์จะบล็อกคำขอ (CORS)</li>
+              <li><b>สคริปต์ยังไม่ได้รับอนุมัติสิทธิ์:</b> ในการ Deploy ครั้งแรก ต้องคลิกอนุมัติสิทธิ์ (Authorize Access) ให้สคริปต์สามารถอ่านเขียนข้อมูลบน Google Sheets ของคุณได้</li>
+              <li><b>ใช้ลิงก์สคริปต์ผิดประเภท:</b> ตรวจสอบลิงก์ <code class="bg-red-50 text-red-600 px-1 rounded font-mono">API_URL</code> ว่าลงท้ายด้วย <code class="bg-blue-50 text-blue-600 px-1 rounded font-mono">/exec</code> หรือยัง (ลิงก์แบบทดสอบสคริปต์ที่ลงท้ายด้วย <code class="bg-red-50 text-red-600 px-1 rounded font-mono">/dev</code> จะเปิดให้ใช้งานได้เฉพาะเจ้าของบัญชีเท่านั้น และไม่รองรับการเรียกจาก GitHub)</li>
+              <li><b>ข้อมูลข้อผิดพลาด:</b> <span class="font-mono text-red-600 font-semibold">${err.message || err}</span></li>
+            </ul>
+            <div class="mt-4 pt-3 border-t border-slate-200">
+              <p class="font-bold text-slate-700">ขั้นตอนการ Deploy ใหม่เพื่อแก้ไขปัญหา:</p>
+              <ol class="list-decimal pl-4 mt-1 space-y-1 text-slate-500">
+                <li>เปิดสคริปต์ที่ <b>script.google.com</b></li>
+                <li>ไปที่ปุ่ม <b>"การทำให้ใช้งานได้ (Deploy)"</b> &rarr; เลือก <b>"จัดการการทำให้ใช้งานได้ (Manage Deployments)"</b></li>
+                <li>คลิกรูป <b>"ดินสอ (แก้ไข)"</b> ของรายการล่าสุด</li>
+                <li>เลือกเวอร์ชันเป็น <b>"เวอร์ชันใหม่ (New Version)"</b></li>
+                <li>เปลี่ยนหัวข้อผู้มีสิทธิ์เข้าถึงเป็น <b>"ทุกคน (Anyone)"</b></li>
+                <li>กด <b>"ทำให้ใช้งานได้ (Deploy)"</b> แล้วคัดลอกลิงก์ใหม่มาอัปเดตแทนค่าเดิม</li>
+              </ol>
+            </div>
+          </div>
+        `,
+        confirmButtonColor: '#1e3a8a',
+        confirmButtonText: 'รับทราบ',
+        customClass: {
+          popup: 'rounded-2xl w-full max-w-lg'
+        }
+      });
     }
 
     function performSearch(showAlert = true) {
