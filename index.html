@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="th" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>H135 Document Reference System</title>
+  <!-- Apply theme before render to avoid flash -->
+  <script>
+    (function(){
+      var t = localStorage.getItem('h135_theme');
+      if (t === 'light') document.documentElement.classList.remove('dark');
+      else document.documentElement.classList.add('dark');
+    })();
+  </script>
+  <!-- Tailwind config must be set before CDN script -->
+  <script>tailwind={config:{darkMode:'class'}}</script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .scrollbar-thin::-webkit-scrollbar               { width:4px; height:4px; }
+    .scrollbar-thin::-webkit-scrollbar-track         { background:#e2e8f0; }
+    .scrollbar-thin::-webkit-scrollbar-thumb         { background:#94a3b8; border-radius:9999px; }
+    .dark .scrollbar-thin::-webkit-scrollbar-track   { background:#1f2937; }
+    .dark .scrollbar-thin::-webkit-scrollbar-thumb   { background:#374151; }
+    @keyframes spin    { to { transform:rotate(360deg); } }
+    .spin              { animation:spin 0.85s linear infinite; }
+    @keyframes fadeUp  { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+    .fade-up           { animation:fadeUp 0.25s ease both; }
+    @keyframes shake   { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-8px)} 40%{transform:translateX(8px)} 60%{transform:translateX(-5px)} 80%{transform:translateX(5px)} }
+    .shake             { animation:shake 0.4s ease; }
+  </style>
+</head>
+<body class="bg-slate-100 dark:bg-gray-950 text-gray-900 dark:text-white min-h-screen">
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useMemo, useCallback, useRef } = React;
+
+// ─────────────────────────────────────────────────────────────
+//  PAGE CONFIG
+// ─────────────────────────────────────────────────────────────
+const PAGES = [
+  {
+    id:'flm', label:'H135 Flight Publications', shortLabel:'Flight Pub.', sheet:'135 FLM',
+    accent:{ tab:'border-blue-500 text-blue-500 dark:text-blue-400', dot:'bg-blue-500', refresh:'bg-blue-600 hover:bg-blue-500', statCard:'bg-blue-600' },
+    catColors:{
+      'Flight Publication':       'bg-blue-100 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-900/60 dark:text-blue-300 dark:ring-blue-700',
+      'Training Manual (System)': 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-900/60 dark:text-emerald-300 dark:ring-emerald-700',
+      'Equipment Manual':         'bg-amber-100 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-900/60 dark:text-amber-300 dark:ring-amber-700',
+    },
+    typeMap:{ 1:'Flight Publication', 2:'Training Manual (System)', 3:'Equipment Manual' },
+    linkKey:'Link หนังสือ', filterKey:'ประเภท',
+    columns:[
+      { key:'ลำดับ',      label:'#',          type:'num',    cls:'w-12 shrink-0' },
+      { key:'ประเภท',      label:'ประเภท',     type:'badge'                       },
+      { key:'ชื่อหนังสือ', label:'ชื่อเอกสาร', type:'main'                        },
+      { key:'Size',       label:'ขนาด',       type:'right'                       },
+      { key:'Year',       label:'ปี',         type:'center'                      },
+    ],
+  },
+  {
+    id:'regt', label:'RTAF DOC.', shortLabel:'RTAF DOC.', sheet:'135 REGT',
+    accent:{ tab:'border-rose-500 text-rose-500 dark:text-rose-400', dot:'bg-rose-500', refresh:'bg-rose-600 hover:bg-rose-500', statCard:'bg-rose-600' },
+    catColors:{
+      'Document':    'bg-blue-100 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-900/60 dark:text-blue-300 dark:ring-blue-700',
+      'รปป.การฝึก': 'bg-rose-100 text-rose-700 ring-1 ring-rose-200 dark:bg-rose-900/60 dark:text-rose-300 dark:ring-rose-700',
+      'สำหรับ ศบ.': 'bg-purple-100 text-purple-700 ring-1 ring-purple-200 dark:bg-purple-900/60 dark:text-purple-300 dark:ring-purple-700',
+    },
+    linkKey:'Link หนังสือ', filterKey:'ประเภท',
+    columns:[
+      { key:'ลำดับ',      label:'#',          type:'num',   cls:'w-12 shrink-0' },
+      { key:'ประเภท',      label:'ประเภท',     type:'badge'                       },
+      { key:'ชื่อหนังสือ', label:'ชื่อเอกสาร', type:'main'                        },
+      { key:'Revision',   label:'Rev.',       type:'text'                        },
+      { key:'Size',       label:'ขนาด',       type:'right'                       },
+      { key:'Year',       label:'ปี',         type:'center'                      },
+    ],
+  },
+  {
+    id:'formrk', label:'DOC. Form', shortLabel:'DOC. Form', sheet:'135 FormRK',
+    accent:{ tab:'border-amber-500 text-amber-500 dark:text-amber-400', dot:'bg-amber-500', refresh:'bg-amber-600 hover:bg-amber-500', statCard:'bg-amber-600' },
+    catColors:{
+      'Document':       'bg-blue-100 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-900/60 dark:text-blue-300 dark:ring-blue-700',
+      'Record Keeping': 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-900/60 dark:text-emerald-300 dark:ring-emerald-700',
+    },
+    linkKey:'Link หนังสือ', filterKey:'ประเภท',
+    columns:[
+      { key:'ลำดับ',      label:'#',          type:'num',   cls:'w-12 shrink-0' },
+      { key:'ประเภท',      label:'ประเภท',     type:'badge'                       },
+      { key:'สำหรับ',     label:'สำหรับ',     type:'text'                        },
+      { key:'ชื่อหนังสือ', label:'ชื่อเอกสาร', type:'main'                        },
+      { key:'รหัสเอกสาร', label:'รหัส',       type:'text'                        },
+      { key:'Rev.',       label:'Rev.',       type:'text'                        },
+      { key:'Size',       label:'ขนาด',       type:'right'                       },
+      { key:'Year',       label:'ปี',         type:'center'                      },
+    ],
+  },
+  {
+    id:'handbook', label:'Handbook', shortLabel:'Handbook', sheet:'Handbook',
+    accent:{ tab:'border-violet-500 text-violet-500 dark:text-violet-400', dot:'bg-violet-500', refresh:'bg-violet-600 hover:bg-violet-500', statCard:'bg-violet-600' },
+    catColors:{
+      'Text Book':   'bg-blue-100 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-900/60 dark:text-blue-300 dark:ring-blue-700',
+      'Manual':      'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-900/60 dark:text-emerald-300 dark:ring-emerald-700',
+      'PTS':         'bg-amber-100 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-900/60 dark:text-amber-300 dark:ring-amber-700',
+      'Handbook':    'bg-violet-100 text-violet-700 ring-1 ring-violet-200 dark:bg-violet-900/60 dark:text-violet-300 dark:ring-violet-700',
+      'Booklet':     'bg-pink-100 text-pink-700 ring-1 ring-pink-200 dark:bg-pink-900/60 dark:text-pink-300 dark:ring-pink-700',
+      'White Paper': 'bg-slate-200 text-slate-600 ring-1 ring-slate-300 dark:bg-slate-700/60 dark:text-slate-300 dark:ring-slate-500',
+    },
+    linkKey:'Link หนังสือ', filterKey:'ประเภท', secondaryFilterKey:'แหล่งอ้างอิง',
+    columns:[
+      { key:'ลำดับ',        label:'#',          type:'num',   cls:'w-12 shrink-0' },
+      { key:'ประเภท',        label:'ประเภท',     type:'badge'                       },
+      { key:'แหล่งอ้างอิง', label:'แหล่ง',      type:'text'                        },
+      { key:'For',          label:'For',        type:'text'                        },
+      { key:'ชื่อหนังสือ',  label:'ชื่อเอกสาร', type:'main'                        },
+      { key:'Edition',      label:'Edition',    type:'text'                        },
+      { key:'Size',         label:'ขนาด',       type:'right'                       },
+      { key:'Year',         label:'ปี',         type:'center'                      },
+    ],
+  },
+];
+
+// ─────────────────────────────────────────────────────────────
+//  MOCK DATA
+// ─────────────────────────────────────────────────────────────
+const MOCK = {
+  '135 FLM': [
+    { ลำดับ:1,  ประเภท:1, ชื่อหนังสือ:'FFLM Revision 32 (MAR 16, 2026)',                    Size:'179 MB',   Year:2026, 'Link หนังสือ':'https://drive.google.com/file/d/1qmeqkUSdyIPzl7AxqWsQ50a4BQGS4Yop/view?usp=sharing' },
+    { ลำดับ:2,  ประเภท:1, ชื่อหนังสือ:'FPCL Rev.21 relate FFLM Rev.32 (MAR 16, 2026)',      Size:'1.8 MB',   Year:2025, 'Link หนังสือ':'https://drive.google.com/file/d/1P5caGRn4-3-u4_w0RsbEjgh9Kq2heZWA/view?usp=sharing' },
+    { ลำดับ:3,  ประเภท:1, ชื่อหนังสือ:"H135-AFCS User's Guide FOBN",                        Size:'14.1 MB',  Year:2020, 'Link หนังสือ':'https://drive.google.com/file/d/1dPJXmgNQAeOlEyNYbhD8GLuIHUyd_naO/view?usp=sharing' },
+    { ลำดับ:4,  ประเภท:1, ชื่อหนังสือ:'H135-Ground Rescue Booklet (Rev.0)',                  Size:'1.4 MB',   Year:2015, 'Link หนังสือ':'https://drive.google.com/file/d/1PKFEXJqVom1WJsGcuSQgTQXK-h_gmSvs/view?usp=sharing' },
+    { ลำดับ:5,  ประเภท:1, ชื่อหนังสือ:'T.I.P.I User Guide',                                 Size:'419 KB',   Year:2019, 'Link หนังสือ':'https://drive.google.com/file/d/14PI1U3HPSnd_czxqKKTz1FgVWrRtrGfE/view?usp=sharing' },
+    { ลำดับ:6,  ประเภท:1, ชื่อหนังสือ:'EASA Operational Suitability Data (OSD) Rev.2.1',    Size:'2.1 MB',   Year:2020, 'Link หนังสือ':'https://drive.google.com/file/d/1j66Ug9sq78HBpmvBzB51kkCoh46y_UDV/view?usp=sharing' },
+    { ลำดับ:7,  ประเภท:1, ชื่อหนังสือ:'MMEL Rev.6 (NOV 29, 2019)',                          Size:'8 MB',     Year:2019, 'Link หนังสือ':'https://drive.google.com/file/d/1QqWcYGDBhD5AjPE9wpTLQ0hcAf_Z4ce3/view?usp=drive_link' },
+    { ลำดับ:8,  ประเภท:2, ชื่อหนังสือ:'Introduction',                                       Size:'313 KB',   Year:2019, 'Link หนังสือ':'https://drive.google.com/file/d/1kVaPgiXzaoKu4iaXoR5PGdgn4DApSp6g/view?usp=sharing' },
+    { ลำดับ:9,  ประเภท:2, ชื่อหนังสือ:'Ch.01-First Contact with the Helicopter',            Size:'5.4 MB',   Year:2019, 'Link หนังสือ':'https://drive.google.com/file/d/1YaWZbtGbxRPkcUU09Tvp_vE9qqZmMyxL/view?usp=sharing' },
+    { ลำดับ:10, ประเภท:2, ชื่อหนังสือ:'Ch.02-Integrated Modular Avionics (Helionix)',        Size:'61.5 MB',  Year:2019, 'Link หนังสือ':'https://drive.google.com/file/d/1lg_FK-zPoLmztJgNBp4HCphMU-awL8oG/view?usp=sharing' },
+    { ลำดับ:11, ประเภท:2, ชื่อหนังสือ:'Ch.03-Handling of the helicopter',                   Size:'650 KB',   Year:2019, 'Link หนังสือ':'https://drive.google.com/file/d/1FCbP46MvBodS9Ah5-GregeTWzs6l36Zx/view?usp=sharing' },
+    { ลำดับ:12, ประเภท:2, ชื่อหนังสือ:'Ch.04-Lifting System',                               Size:'36.8 MB',  Year:2019, 'Link หนังสือ':'https://drive.google.com/file/d/1yuIkOybnfIkskEvfYjCnEQQQwYQBEGs8/view?usp=sharing' },
+    { ลำดับ:13, ประเภท:2, ชื่อหนังสือ:'Ch.05-Fuselage',                                     Size:'10.5 MB',  Year:2019, 'Link หนังสือ':'https://drive.google.com/file/d/1VMcE-91YctOGbjrnznXQXsgC6HfRnaLO/view?usp=sharing' },
+    { ลำดับ:14, ประเภท:2, ชื่อหนังสือ:'Ch.06-Tail Unit',                                    Size:'9 MB',     Year:2019, 'Link หนังสือ':'https://drive.google.com/file/d/114DQzSBnPEQSanUxMA3vGV7GkZUcRobU/view?usp=sharing' },
+    { ลำดับ:15, ประเภท:2, ชื่อหนังสือ:'Ch.07-Flight Control',                               Size:'18.2 MB',  Year:2019, 'Link หนังสือ':'https://drive.google.com/file/d/1mjX2HGKXbT1gZbKe89nd5fMjvbD8wf_a/view?usp=sharing' },
+    { ลำดับ:16, ประเภท:2, ชื่อหนังสือ:'Ch.08-Hydraulic System',                             Size:'14.7 MB',  Year:2019, 'Link หนังสือ':'https://drive.google.com/file/d/1Yh-emr0kuohLh_SJLGKBJ_17TXIgMbad/view?usp=sharing' },
+    { ลำดับ:17, ประเภท:2, ชื่อหนังสือ:'Ch.09-Landing Gear',                                 Size:'2.9 MB',   Year:2019, 'Link หนังสือ':'https://drive.google.com/file/d/1EFsJb7q3mpEIRA6R2c4DT52Y3Uuw9rib/view?usp=sharing' },
+    { ลำดับ:18, ประเภท:2, ชื่อหนังสือ:'Ch.10-Fuel System',                                  Size:'18.1 MB',  Year:2019, 'Link หนังสือ':'https://drive.google.com/file/d/1l20nmnPl2U69FHCeUHVUaXIAmgWzjOYX/view?usp=sharing' },
+    { ลำดับ:19, ประเภท:2, ชื่อหนังสือ:'Ch.11-Power Plant',                                  Size:'46.1 MB',  Year:2019, 'Link หนังสือ':'https://drive.google.com/file/d/1sXr2EdVPWgq373GSLORJ7nzl36Zx/view?usp=sharing' },
+    { ลำดับ:20, ประเภท:2, ชื่อหนังสือ:'Ch.12-Fire Protection System',                       Size:'3.5 MB',   Year:2019, 'Link หนังสือ':'https://drive.google.com/file/d/1ETR6gWL7x7J8fDvm_UCAMyHYxm0-Mh8F/view?usp=sharing' },
+    { ลำดับ:21, ประเภท:2, ชื่อหนังสือ:'Ch.13-Ice and Rain Protection',                      Size:'2 MB',     Year:2019, 'Link หนังสือ':'https://drive.google.com/file/d/1XAHyrVUAnX_QvSuCPdYlkY4P7gcmFEXc/view?usp=sharing' },
+    { ลำดับ:22, ประเภท:2, ชื่อหนังสือ:'Ch.14-Equipment and Furnishing',                     Size:'6.6 MB',   Year:2019, 'Link หนังสือ':'https://drive.google.com/file/d/1h2_2HYuE6ECl4Mt5Ut7D4rklIv_Ir6SN/view?usp=sharing' },
+    { ลำดับ:23, ประเภท:2, ชื่อหนังสือ:'Ch.15-Heating and Ventilation',                      Size:'1.5 MB',   Year:2019, 'Link หนังสือ':'https://drive.google.com/file/d/1QNKISDVfZJC0OGT2RPj5PsCGB5Gbb3cw/view?usp=sharing' },
+    { ลำดับ:24, ประเภท:2, ชื่อหนังสือ:'Ch.16-Avionics Generalities',                        Size:'74.9 MB',  Year:2019, 'Link หนังสือ':'https://drive.google.com/file/d/1z3m6t7Bi2fF26uyTZ5o_xAddkppINn8y/view?usp=sharing' },
+    { ลำดับ:25, ประเภท:2, ชื่อหนังสือ:'Ch.17-Electrical System',                            Size:'44.7 MB',  Year:2019, 'Link หนังสือ':'https://drive.google.com/file/d/1XjEVrxVZyXg6VSdGzBylSDV2fHwBQKlg/view?usp=sharing' },
+    { ลำดับ:26, ประเภท:2, ชื่อหนังสือ:'Ch.18-Inspections',                                  Size:'626 KB',   Year:2019, 'Link หนังสือ':'https://drive.google.com/file/d/1IlO0zxWubBbRxpuRTpso_ATLKjYoAm_y/view?usp=sharing' },
+    { ลำดับ:27, ประเภท:2, ชื่อหนังสือ:'Ch.19-Autopilot',                                    Size:'52.7 MB',  Year:2019, 'Link หนังสือ':'https://drive.google.com/file/d/1z6ZqbQP6EskPXc-dUUJgJmoF3U4OrnGf/view?usp=sharing' },
+    { ลำดับ:28, ประเภท:3, ชื่อหนังสือ:'UHF Control Unit Operator Manual',                   Size:'4.7 MB',   Year:2014, 'Link หนังสือ':'https://drive.google.com/file/d/1-j7ReIAU7uaiL5SykQ4-3QrDdYVjD76o/view?usp=sharing' },
+    { ลำดับ:29, ประเภท:3, ชื่อหนังสือ:"RDR 2000 Weather Radar Pilot's Guide (Rev.3)",       Size:'36.6 MB',  Year:1999, 'Link หนังสือ':'https://drive.google.com/file/d/1QF0M59FNVx1_jwv1zhRkCYG6Ou7Ohj9v/view?usp=sharing' },
+    { ลำดับ:30, ประเภท:3, ชื่อหนังสือ:"ADF Pilot's Guide Rev.D (DEC 2005)",                 Size:'826 KB',   Year:2005, 'Link หนังสือ':'https://drive.google.com/file/d/1sc3Mq3LZOJ5ul342atLZTEMFTqSovOki/view?usp=sharing' },
+    { ลำดับ:31, ประเภท:3, ชื่อหนังสือ:"TACAN Pilot's Guide (JULY 13, 2010)",                Size:'9.1 MB',   Year:2010, 'Link หนังสือ':'https://drive.google.com/file/d/1MhsXV4BlBv4iUdPf7waMlJnUkQDuM6c8/view?usp=sharing' },
+    { ลำดับ:32, ประเภท:3, ชื่อหนังสือ:'Transponder Control and Display Unit (XPDR)',        Size:'127 KB',   Year:2020, 'Link หนังสือ':'https://drive.google.com/file/d/18ZZtMWcZVgWlJhUo1GGRV2vBaGCPAZv5/view?usp=sharing' },
+    { ลำดับ:33, ประเภท:3, ชื่อหนังสือ:"GTN 725-750 Pilot's Guide",                          Size:'90.7 MB',  Year:2016, 'Link หนังสือ':'https://drive.google.com/file/d/1VpLWWcMqS-4TYrEQQnNpdc1RNYoRzBMU/view?usp=sharing' },
+    { ลำดับ:34, ประเภท:3, ชื่อหนังสือ:'GTN 725-750 Cockpit Reference Guide (Rev.J)',        Size:'9.2 MB',   Year:2016, 'Link หนังสือ':'https://drive.google.com/file/d/1LadYt8yPG_HGGYoau2yvWmeZ8puZcj58/view?usp=sharing' },
+    { ลำดับ:35, ประเภท:3, ชื่อหนังสือ:'EuroNav 7 Operator Manual',                          Size:'197.9 MB', Year:'',   'Link หนังสือ':'https://drive.google.com/file/d/1zjeXCEqFAM3SO3GXnI0cxAfCt2xlN8eJ/view?usp=sharing' },
+  ],
+  '135 REGT': [
+    { ลำดับ:1,  ประเภท:'Document',    ชื่อหนังสือ:'Cockpit Arrangement Guide Book (แผ่นพับ)',              Revision:'0.0',     Size:'31.1 MB', Year:2024, 'Link หนังสือ':'https://drive.google.com/file/d/1IgdIbtXXwfr8FAhor9v68A_odgAmqKBb/view?usp=drive_link' },
+    { ลำดับ:2,  ประเภท:'Document',    ชื่อหนังสือ:'Cockpit Arrangement Guide Book for Interactive',        Revision:'0.0',     Size:'3.9 MB',  Year:2024, 'Link หนังสือ':'https://drive.google.com/file/d/1-eK-nyJT8mGa1JBLn3VvP4OoAzqS5VZy/view?usp=sharing' },
+    { ลำดับ:3,  ประเภท:'Document',    ชื่อหนังสือ:'Normal Procedure (Pilot Checklist)',                    Revision:'',        Size:'168 KB',  Year:2018, 'Link หนังสือ':'https://drive.google.com/file/d/1_nyA0wFMS_rcPQcUxlcXlCWMQtvLp1E7/view?usp=sharing' },
+    { ลำดับ:4,  ประเภท:'Document',    ชื่อหนังสือ:'IFR Procedure (Pilot Checklist)',                       Revision:'',        Size:'105 KB',  Year:2022, 'Link หนังสือ':'https://drive.google.com/file/d/1sC_rqsnvvoJb-XWYl3RTkHtRvFeKGKzP/view?usp=sharing' },
+    { ลำดับ:5,  ประเภท:'Document',    ชื่อหนังสือ:'H135 Confined Area Procedure',                          Revision:'1.0',     Size:'4.5 MB',  Year:2025, 'Link หนังสือ':'https://drive.google.com/file/d/1NhNHZzavrl8np3kocf-zUYOYdo8sU9rI/view?usp=sharing' },
+    { ลำดับ:6,  ประเภท:'Document',    ชื่อหนังสือ:'H135 Standard Manual (Basic Helicopter Edition)',        Revision:'',        Size:'1.4 MB',  Year:2022, 'Link หนังสือ':'https://drive.google.com/file/d/12kr-SkDbhtr3KqcTJsfO0gyLh2njv2R6/view?usp=sharing' },
+    { ลำดับ:7,  ประเภท:'Document',    ชื่อหนังสือ:'H135 Briefing Guide (for SP)',                          Revision:'',        Size:'150 KB',  Year:2024, 'Link หนังสือ':'https://drive.google.com/file/d/1WuM5300reQhWovPKccVIh-vo4IWRhpxU/view?usp=drive_link' },
+    { ลำดับ:8,  ประเภท:'Document',    ชื่อหนังสือ:'H135 Briefing Guide (for Combat Ready)',                Revision:'',        Size:'316 KB',  Year:2024, 'Link หนังสือ':'https://drive.google.com/file/d/1olnMkdzYOc_FOEgXtWJU8f-qIE16ScK7/view?usp=sharing' },
+    { ลำดับ:9,  ประเภท:'Document',    ชื่อหนังสือ:'FTD Syllabus',                                          Revision:'No.02',   Size:'1.5 MB',  Year:2022, 'Link หนังสือ':'https://drive.google.com/file/d/1Hfr6pVFwZEcdWnOhHweSvyelqds7_UqS/view?usp=sharing' },
+    { ลำดับ:10, ประเภท:'Document',    ชื่อหนังสือ:'H135 MEL (202 SQDN.)',                                  Revision:'0.0',     Size:'8.0 MB',  Year:2024, 'Link หนังสือ':'https://drive.google.com/file/d/1fzy5HvzjlPI2jY2mmIomQnx_gRUkqIXg/view?usp=drivesdk' },
+    { ลำดับ:11, ประเภท:'Document',    ชื่อหนังสือ:'H135 Test Guide',                                       Revision:'0.0',     Size:'3.4 MB',  Year:2024, 'Link หนังสือ':'https://drive.google.com/file/d/13rs_CiWdChD-8OHCkdf-FBP0RUDqnavk/view?usp=sharing' },
+    { ลำดับ:12, ประเภท:'รปป.การฝึก', ชื่อหนังสือ:'รปป.ที่ บน.2-03-008 : การฝึกอบรม นบ.ฮ.13',              Revision:'',        Size:'3.13 MB', Year:'',   'Link หนังสือ':'' },
+    { ลำดับ:13, ประเภท:'รปป.การฝึก', ชื่อหนังสือ:'ผนวก ก : ฝฮ. - การฝึกนักบินเฮลิคอปเตอร์ขั้นต้น',      Revision:'130 ชม.', Size:'2.35 MB', Year:'',   'Link หนังสือ':'' },
+    { ลำดับ:14, ประเภท:'รปป.การฝึก', ชื่อหนังสือ:'ผนวก ข : ฝป. - การฝึกเปลี่ยนแบบ',                       Revision:'78 ชม.',  Size:'952 KB',  Year:'',   'Link หนังสือ':'' },
+    { ลำดับ:15, ประเภท:'รปป.การฝึก', ชื่อหนังสือ:'ผนวก ค : ฝพ. - การฝึกบินพร้อมรบ',                       Revision:'25 ชม.',  Size:'1.78 MB', Year:'',   'Link หนังสือ':'' },
+    { ลำดับ:16, ประเภท:'รปป.การฝึก', ชื่อหนังสือ:'ผนวก ง : พ. - การบินรักษาสมรรถภาพความพร้อมรบต่อเนื่อง', Revision:'40 ชม.',  Size:'2.29 MB', Year:'',   'Link หนังสือ':'' },
+    { ลำดับ:17, ประเภท:'รปป.การฝึก', ชื่อหนังสือ:'ผนวก จ : พพ. - การบินรักษาสมรรถภาพพร้อมรบต่อเนื่องพิเศษ',Revision:'40 ชม.',  Size:'2.30 MB', Year:'',   'Link หนังสือ':'' },
+    { ลำดับ:18, ประเภท:'รปป.การฝึก', ชื่อหนังสือ:'ผนวก ฉ : ฝนบ.1 - การฝึกนักบินที่ 1',                   Revision:'30 ชม.',  Size:'1.86 MB', Year:'',   'Link หนังสือ':'' },
+    { ลำดับ:19, ประเภท:'รปป.การฝึก', ชื่อหนังสือ:'ผนวก ช : ฝค. - การฝึกครูการบิน',                        Revision:'50 ชม.',  Size:'1.71 MB', Year:'',   'Link หนังสือ':'' },
+    { ลำดับ:20, ประเภท:'รปป.การฝึก', ชื่อหนังสือ:'ผนวก ซ : ฝฟ. - การฝึกฟื้นฟูการบิน',                    Revision:'20 ชม.',  Size:'1.43 MB', Year:'',   'Link หนังสือ':'' },
+    { ลำดับ:21, ประเภท:'รปป.การฝึก', ชื่อหนังสือ:'ผนวก ฌ : ฝพค. - การฝึกฟื้นฟูครูการบิน',                 Revision:'15 ชม.',  Size:'1.26 MB', Year:'',   'Link หนังสือ':'' },
+    { ลำดับ:22, ประเภท:'รปป.การฝึก', ชื่อหนังสือ:'ผนวก ญ : ฝคล. - การฝึกนักบินลองเครื่อง',                Revision:'9 ชม.',   Size:'640 KB',  Year:'',   'Link หนังสือ':'' },
+    { ลำดับ:23, ประเภท:'รปป.การฝึก', ชื่อหนังสือ:'ผนวก ฏ : พน. - การบินรักษาสมรรถภาพพร้อมรบนักบินนอกหน่วย',Revision:'3 ชม.',   Size:'572 KB',  Year:'',   'Link หนังสือ':'' },
+    { ลำดับ:24, ประเภท:'สำหรับ ศบ.', ชื่อหนังสือ:'หลักสูตรศิษย์การบินกองทัพอากาศ พ.ศ.2566',               Revision:'',        Size:'22.9 MB', Year:2567, 'Link หนังสือ':'' },
+    { ลำดับ:25, ประเภท:'สำหรับ ศบ.', ชื่อหนังสือ:'มาตรฐานการปฏิบัติการบินกับ ฮ.13 (SOP)',                  Revision:'0.1',     Size:'6.6 MB',  Year:2568, 'Link หนังสือ':'' },
+    { ลำดับ:26, ประเภท:'สำหรับ ศบ.', ชื่อหนังสือ:'ระเบียบ บน.2 ว่าด้วยการปฏิบัติและการลงทัณฑ์ฯ ของ ศบ. พ.ศ.2567',Revision:'',  Size:'2.3 MB',  Year:2567, 'Link หนังสือ':'' },
+  ],
+  '135 FormRK': [
+    { ลำดับ:1,  ประเภท:'Document',       สำหรับ:'ว.3',  ชื่อหนังสือ:'Emergency Test Form',                                         รหัสเอกสาร:'',         'Rev.':'',    Size:'523 KB',  Year:2022, 'Link หนังสือ':'' },
+    { ลำดับ:2,  ประเภท:'Document',       สำหรับ:'ว.3',  ชื่อหนังสือ:'Limitation Test Form',                                        รหัสเอกสาร:'',         'Rev.':'',    Size:'2.3 MB',  Year:2022, 'Link หนังสือ':'' },
+    { ลำดับ:3,  ประเภท:'Record Keeping', สำหรับ:'คบ.',  ชื่อหนังสือ:'แบบบันทึกแผนการสอนของ คบ. (ภาควิชาการ) – Ground Lesson Plan', รหัสเอกสาร:'IP-01',    'Rev.':'0.0', Size:'103 KB',  Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:4,  ประเภท:'Record Keeping', สำหรับ:'คบ.',  ชื่อหนังสือ:'แบบบันทึกแผนการสอนของ คบ. (ภาคอากาศ) – Flight Lesson Plan',  รหัสเอกสาร:'IP-02',    'Rev.':'0.0', Size:'80 KB',   Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:5,  ประเภท:'Record Keeping', สำหรับ:'ศบ.',  ชื่อหนังสือ:'หน้าปกแฟ้มข้อมูล ศบ.',                                        รหัสเอกสาร:'RK-00',    'Rev.':'0.0', Size:'1.2 MB',  Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:6,  ประเภท:'Record Keeping', สำหรับ:'ศบ.',  ชื่อหนังสือ:'ข้อมูลนักบิน',                                                 รหัสเอกสาร:'RK-01',    'Rev.':'0.0', Size:'66 KB',   Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:7,  ประเภท:'Record Keeping', สำหรับ:'ศบ.',  ชื่อหนังสือ:'แบบการจัดตารางอบรม ภาควิชาการ',                                รหัสเอกสาร:'RK-02A',   'Rev.':'0.0', Size:'1.1 MB',  Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:8,  ประเภท:'Record Keeping', สำหรับ:'ศบ.',  ชื่อหนังสือ:'แบบบันทึกการอบรมวิชาการ (รายวิชา)',                            รหัสเอกสาร:'RK-02B',   'Rev.':'0.0', Size:'239 KB',  Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:9,  ประเภท:'Record Keeping', สำหรับ:'ศบ.',  ชื่อหนังสือ:'แบบรายงานสรุปความก้าวหน้า การอบรมภาควิชาการ',                 รหัสเอกสาร:'RK-02C',   'Rev.':'0.0', Size:'84 KB',   Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:10, ประเภท:'Record Keeping', สำหรับ:'ศบ.',  ชื่อหนังสือ:'กระดาษคำตอบปรนัย 100 ข้อ',                                    รหัสเอกสาร:'RK-GT',    'Rev.':'0.0', Size:'3.9 MB',  Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:11, ประเภท:'Record Keeping', สำหรับ:'ศบ.',  ชื่อหนังสือ:'แบบรายงานผลการทดสอบภาควิชาการ',                                รหัสเอกสาร:'RK-02D',   'Rev.':'0.0', Size:'95 KB',   Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:12, ประเภท:'Record Keeping', สำหรับ:'ศบ.',  ชื่อหนังสือ:'แบบทดสอบ H135 Blindfold Cockpit Check',                        รหัสเอกสาร:'RK-03A',   'Rev.':'0.1', Size:'162 KB',  Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:13, ประเภท:'Record Keeping', สำหรับ:'ศบ.',  ชื่อหนังสือ:'H135 Cockpit Arrangement',                                     รหัสเอกสาร:'RK-03B',   'Rev.':'0.0', Size:'1.2 MB',  Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:14, ประเภท:'Record Keeping', สำหรับ:'ศบ.',  ชื่อหนังสือ:'H135 Cockpit Arrangement (Interactive)',                       รหัสเอกสาร:'RK-03B-02','Rev.':'0.0', Size:'34.9 MB', Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:15, ประเภท:'Record Keeping', สำหรับ:'ศบ.',  ชื่อหนังสือ:'H135 Emergency & Limitation Test Form',                        รหัสเอกสาร:'RK-04/05', 'Rev.':'0.0', Size:'24 MB',   Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:16, ประเภท:'Record Keeping', สำหรับ:'ศบ.',  ชื่อหนังสือ:'H135 Emergency & Limitation Test Form (เฉลย)',                 รหัสเอกสาร:'RK-04/05', 'Rev.':'0.0', Size:'24 MB',   Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:17, ประเภท:'Record Keeping', สำหรับ:'ศบ.',  ชื่อหนังสือ:'Flight Training Device (FTD) Training Record',                 รหัสเอกสาร:'RK-06A',   'Rev.':'0.0', Size:'292 KB',  Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:18, ประเภท:'Record Keeping', สำหรับ:'ศบ.',  ชื่อหนังสือ:'Flight Training Device (FTD) Grade Slip-(FTD14)',              รหัสเอกสาร:'RK-06B',   'Rev.':'0.0', Size:'63 KB',   Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:19, ประเภท:'Record Keeping', สำหรับ:'ศบ.',  ชื่อหนังสือ:'แบบรายงานผลการทดสอบและวิจารณ์ (Oral Test)',                   รหัสเอกสาร:'RK-07',    'Rev.':'0.0', Size:'116 KB',  Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:20, ประเภท:'Record Keeping', สำหรับ:'ศบ.',  ชื่อหนังสือ:'H135 Grade Slip – BCM Phase: C101-C110',                       รหัสเอกสาร:'RK-08AF1', 'Rev.':'0.1', Size:'75 KB',   Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:21, ประเภท:'Record Keeping', สำหรับ:'ศบ.',  ชื่อหนังสือ:'H135 Grade Slip – BCM Phase: C111',                            รหัสเอกสาร:'RK-08AF2', 'Rev.':'0.1', Size:'70 KB',   Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:22, ประเภท:'Record Keeping', สำหรับ:'ศบ.',  ชื่อหนังสือ:'แบบทดสอบประจำวัฏภาค Basic Contact Maneuvers Phase (BCM)',      รหัสเอกสาร:'RK-08B',   'Rev.':'0.0', Size:'95 KB',   Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:23, ประเภท:'Record Keeping', สำหรับ:'ศบ.',  ชื่อหนังสือ:'H135 Grade Slip – ACM Phase: C201-C211',                       รหัสเอกสาร:'RK-09AF1', 'Rev.':'0.2', Size:'75 KB',   Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:24, ประเภท:'Record Keeping', สำหรับ:'ศบ.',  ชื่อหนังสือ:'H135 Grade Slip – ACM Phase: C212',                            รหัสเอกสาร:'RK-09AF2', 'Rev.':'0.2', Size:'70 KB',   Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:25, ประเภท:'Record Keeping', สำหรับ:'ศบ.',  ชื่อหนังสือ:'แบบทดสอบประจำวัฏภาค Advanced Contact Maneuver Phase (ACM)',    รหัสเอกสาร:'RK-09B',   'Rev.':'0.0', Size:'101 KB',  Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:26, ประเภท:'Record Keeping', สำหรับ:'ศบ.',  ชื่อหนังสือ:'H135 Grade Slip – NAV Phase: NAV101-NAV105',                   รหัสเอกสาร:'RK-10AF1', 'Rev.':'0.0', Size:'75 KB',   Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:27, ประเภท:'Record Keeping', สำหรับ:'ศบ.',  ชื่อหนังสือ:'H135 Grade Slip – NAV Phase: NAV106',                          รหัสเอกสาร:'RK-10AF2', 'Rev.':'0.1', Size:'70 KB',   Year:2024, 'Link หนังสือ':'' },
+    { ลำดับ:28, ประเภท:'Record Keeping', สำหรับ:'ศบ.',  ชื่อหนังสือ:'แบบทดสอบประจำวัฏภาค Navigation Phase (NAV)',                   รหัสเอกสาร:'RK-10B',   'Rev.':'0.0', Size:'106 KB',  Year:2024, 'Link หนังสือ':'' },
+  ],
+  'Handbook': [
+    { ลำดับ:'A', ประเภท:'Text Book',   แหล่งอ้างอิง:'JEPPESEN', For:'General',   ชื่อหนังสือ:'JEPPESEN Private Pilot',                   Size:'94.7 MB',  Edition:'-',                          Year:2004, 'Link หนังสือ':'https://drive.google.com/file/d/116v30d-duTwu23-SDvU-66Zm4QOFEoO0/view?usp=sharing' },
+    { ลำดับ:'A', ประเภท:'Text Book',   แหล่งอ้างอิง:'JEPPESEN', For:'General',   ชื่อหนังสือ:'JEPPESEN Instrument Commercial',            Size:'175.2 MB', Edition:'-',                          Year:2016, 'Link หนังสือ':'https://drive.google.com/file/d/1zwjN16p7o7riUKKN69IlrR4RnRoQdrZY/view?usp=sharing' },
+    { ลำดับ:'A', ประเภท:'Text Book',   แหล่งอ้างอิง:'JEPPESEN', For:'General',   ชื่อหนังสือ:'JEPPESEN Multi-Engine',                    Size:'54.3 MB',  Edition:'-',                          Year:2014, 'Link หนังสือ':'https://drive.google.com/file/d/1J3H7mYyXDGv-z68UWhaOBRHhRAGVJHyW/view?usp=sharing' },
+    { ลำดับ:'A', ประเภท:'Text Book',   แหล่งอ้างอิง:'JEPPESEN', For:'General',   ชื่อหนังสือ:'JEPPESEN Flight Instructor Textbook',       Size:'354 MB',   Edition:'-',                          Year:2014, 'Link หนังสือ':'https://drive.google.com/file/d/1yCuG0be-xSptVO1vwIndsw3Jymu0QUjL/view?usp=sharing' },
+    { ลำดับ:'B', ประเภท:'Manual',      แหล่งอ้างอิง:'FAA',      For:'General',   ชื่อหนังสือ:'AIM: Aeronautical Information Manual',      Size:'17 MB',    Edition:'-',                          Year:2021, 'Link หนังสือ':'https://drive.google.com/file/d/14o7Nqtvutvj2PFjdcANueYSODs_VSiIG/view?usp=sharing' },
+    { ลำดับ:'B', ประเภท:'PTS',         แหล่งอ้างอิง:'FAA',      For:'Helicopter',ชื่อหนังสือ:"PTS Private Pilot for Helicopter",           Size:'241 KB',   Edition:'FAA-S-8081-15A (Change 1)', Year:2005, 'Link หนังสือ':'https://drive.google.com/file/d/12SK3abF20muX6OHyURCfEQgdtFYuvA0V/view?usp=sharing' },
+    { ลำดับ:'B', ประเภท:'PTS',         แหล่งอ้างอิง:'FAA',      For:'Helicopter',ชื่อหนังสือ:'PTS Commercial Pilot for Helicopter',        Size:'313 KB',   Edition:'FAA-S-8081-16B',             Year:2013, 'Link หนังสือ':'https://drive.google.com/file/d/1EQ_hAWKnU1KvmfIzVcXF4p8OpM7yEbDw/view?usp=sharing' },
+    { ลำดับ:'B', ประเภท:'Handbook',    แหล่งอ้างอิง:'FAA',      For:'General',   ชื่อหนังสือ:'Aviation Instructors Handbook',             Size:'139 MB',   Edition:'FAA-H-8083-9B',              Year:2020, 'Link หนังสือ':'https://drive.google.com/file/d/1mm_gMUjJ7K4AKScJkxVaQ4CT1Bs-htmT/view?usp=sharing' },
+    { ลำดับ:'B', ประเภท:'Handbook',    แหล่งอ้างอิง:'FAA',      For:'General',   ชื่อหนังสือ:"Pilot's Handbook of Aeronautical Knowledge", Size:'58 MB',    Edition:'FAA-H-8083-25B',             Year:2016, 'Link หนังสือ':'https://drive.google.com/file/d/1c_7mPS3LioDM3DgwcpsfVbuD5jbnnEt2/view?usp=sharing' },
+    { ลำดับ:'B', ประเภท:'Handbook',    แหล่งอ้างอิง:'FAA',      For:'Helicopter',ชื่อหนังสือ:'Helicopter Flying Handbook',                Size:'171 MB',   Edition:'FAA-H-8083-21B',             Year:2019, 'Link หนังสือ':'https://drive.google.com/file/d/1lq9sebld6aORrYQjf5YE7YXWpR7z42wj/view?usp=sharing' },
+    { ลำดับ:'B', ประเภท:'Handbook',    แหล่งอ้างอิง:'FAA',      For:'Helicopter',ชื่อหนังสือ:'Helicopter Instructor Handbook',             Size:'42 MB',    Edition:'FAA-H-8083-4',               Year:2012, 'Link หนังสือ':'https://drive.google.com/file/d/1jrT2ck-fu4NTnjuKdyBhGhhSeeXAoiur/view?usp=sharing' },
+    { ลำดับ:'C', ประเภท:'Handbook',    แหล่งอ้างอิง:'ASA',      For:'Helicopter',ชื่อหนังสือ:'Principles of Helicopter Flight',            Size:'10.4 MB',  Edition:'2nd Edition',                Year:2011, 'Link หนังสือ':'https://drive.google.com/file/d/1PKxfH0AeTdzRXMoH09MQ9a8gp2lh4NPN/view?usp=sharing' },
+    { ลำดับ:'C', ประเภท:'Handbook',    แหล่งอ้างอิง:'ASA',      For:'Helicopter',ชื่อหนังสือ:'Helicopter Maneuvers Manual',                Size:'4.19 MB',  Edition:'-',                          Year:2011, 'Link หนังสือ':'https://drive.google.com/file/d/1P2sTwsFmlu7sYOFj3GBDt7yhozkR5NZh/view?usp=sharing' },
+    { ลำดับ:'D', ประเภท:'Booklet',     แหล่งอ้างอิง:'CASA',     For:'General',   ชื่อหนังสือ:'CASA Human Factor-Introduction',             Size:'783 KB',   Edition:'2nd Edition',                Year:2005, 'Link หนังสือ':'https://drive.google.com/file/d/1X7pYacxwTnczMwcVFGG62zx7wH8amiNd/view?usp=sharing' },
+    { ลำดับ:'D', ประเภท:'Booklet',     แหล่งอ้างอิง:'CASA',     For:'General',   ชื่อหนังสือ:'CASA Human Factor-Safety Culture',           Size:'1.4 MB',   Edition:'2nd Edition',                Year:2005, 'Link หนังสือ':'https://drive.google.com/file/d/179hiHspCrlASoYqxe-ZqvWCiRYKAzQWb/view?usp=sharing' },
+    { ลำดับ:'D', ประเภท:'Manual',      แหล่งอ้างอิง:'CASA',     For:'General',   ชื่อหนังสือ:'CASA SMS1 Safety Management System Basics',  Size:'476 KB',   Edition:'2nd Edition',                Year:2014, 'Link หนังสือ':'https://drive.google.com/file/d/1ijCNDRpiVDwFWxR3am1siN3PT1ZfLBHp/view?usp=sharing' },
+    { ลำดับ:'E', ประเภท:'Handbook',    แหล่งอ้างอิง:'EHEST',    For:'Helicopter',ชื่อหนังสือ:'EHEST HE1 Safety Considerations',            Size:'1.1 MB',   Edition:'-',                          Year:'-',  'Link หนังสือ':'https://drive.google.com/file/d/1wMtAkR-BWCjrtxxDCQizkqpAUWP_DcYa/view?usp=sharing' },
+    { ลำดับ:'E', ประเภท:'Handbook',    แหล่งอ้างอิง:'EHEST',    For:'Helicopter',ชื่อหนังสือ:'EHEST HE2 Helicopter Airmanship',            Size:'1.3 MB',   Edition:'-',                          Year:'-',  'Link หนังสือ':'https://drive.google.com/file/d/1wNw5PTRfreIou8eqDV8biFbURXkiLful/view?usp=sharing' },
+    { ลำดับ:'E', ประเภท:'Handbook',    แหล่งอ้างอิง:'EHEST',    For:'Helicopter',ชื่อหนังสือ:'EHEST Helicopter Flight Instructors Guide',  Size:'50.8 MB',  Edition:'-',                          Year:'-',  'Link หนังสือ':'https://drive.google.com/file/d/1KO8Et8P1hFJS1PCkpjP_K9CFnkpKi5sg/view?usp=sharing' },
+    { ลำดับ:'F', ประเภท:'White Paper', แหล่งอ้างอิง:'HAI',      For:'Helicopter',ชื่อหนังสือ:'HAI Decision-Making and IIMC',              Size:'10.9 MB',  Edition:'-',                          Year:2021, 'Link หนังสือ':'https://drive.google.com/file/d/1nG-IT80zHExoE9BaH-ecO1Fx-uh7bnys/view?usp=sharing' },
+    { ลำดับ:'F', ประเภท:'White Paper', แหล่งอ้างอิง:'HAI',      For:'Helicopter',ชื่อหนังสือ:'HAI VFR Best Practices',                    Size:'1.1 MB',   Edition:'-',                          Year:2021, 'Link หนังสือ':'https://drive.google.com/file/d/13e-tywWy13HAdOq2C_MnbY4-VKG1itFR/view?usp=sharing' },
+    { ลำดับ:'Z', ประเภท:'Handbook',    แหล่งอ้างอิง:'ETC.',     For:'Helicopter',ชื่อหนังสือ:'The Little Book of Autorotations',          Size:'68.8 MB',  Edition:'1st Edition',                Year:2012, 'Link หนังสือ':'https://drive.google.com/file/d/1igzAk900YcuK8I6Yyi_w6YERJuEMD2fd/view?usp=sharing' },
+    { ลำดับ:'Z', ประเภท:'Handbook',    แหล่งอ้างอิง:'ETC.',     For:'Helicopter',ชื่อหนังสือ:'FATAL TRAPS for Helicopter Pilots',         Size:'207.8 MB', Edition:'-',                          Year:2007, 'Link หนังสือ':'https://drive.google.com/file/d/1XHD3eTYWWPeaWrnzxuQSYR-fmY91lPhG/view?usp=sharing' },
+    { ลำดับ:'Z', ประเภท:'Handbook',    แหล่งอ้างอิง:'ETC.',     For:'Helicopter',ชื่อหนังสือ:'ตำรา CSAR กคว.คปอ. ปี 2558',               Size:'3.7 MB',   Edition:'-',                          Year:2558, 'Link หนังสือ':'https://drive.google.com/file/d/1Lb76s5u2J-EJFl5MwAFyphBaSMapJ7J4/view?usp=sharing' },
+  ],
+};
+
+// ─────────────────────────────────────────────────────────────
+//  HELPERS
+// ─────────────────────────────────────────────────────────────
+const IS_GAS = typeof google !== 'undefined' && google.script;
+
+function applyTypeMap(rows, page) {
+  if (!page.typeMap) return rows;
+  return rows.map(r => ({ ...r, ประเภท: page.typeMap[Number(r.ประเภท)] || String(r.ประเภท) }));
+}
+
+function stamp() {
+  return new Date().toLocaleString('th-TH', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+
+function getCatStyle(page, cat) {
+  return page.catColors[cat] || 'bg-gray-100 text-gray-600 ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700';
+}
+
+// ─────────────────────────────────────────────────────────────
+//  ICONS
+// ─────────────────────────────────────────────────────────────
+const IconSun = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+  </svg>
+);
+const IconMoon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+    <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+  </svg>
+);
+const IconDoc = () => (
+  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+    <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+  </svg>
+);
+const IconGrid = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+    <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+  </svg>
+);
+const IconTable = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+    <path d="M3 10h18M3 14h18M10 3v18M3 6a3 3 0 013-3h12a3 3 0 013 3v12a3 3 0 01-3 3H6a3 3 0 01-3-3V6z"/>
+  </svg>
+);
+const IconEye = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+  </svg>
+);
+const IconEyeOff = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+    <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24M1 1l22 22"/>
+  </svg>
+);
+const IconLogout = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
+  </svg>
+);
+const IconRefresh = () => (
+  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+    <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+  </svg>
+);
+const IconOpenDoc = () => (
+  <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+    <path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+  </svg>
+);
+
+// ─────────────────────────────────────────────────────────────
+//  LOGIN PAGE
+// ─────────────────────────────────────────────────────────────
+function LoginPage({ onLogin, isDark, toggleDark }) {
+  const [pw, setPw]         = useState('');
+  const [show, setShow]     = useState(false);
+  const [err, setErr]       = useState(false);
+  const [shaking, setShake] = useState(false);
+
+  const submit = e => {
+    e.preventDefault();
+    if (pw === 'H135.SCL') {
+      sessionStorage.setItem('h135_auth', '1');
+      onLogin();
+    } else {
+      setErr(true);
+      setShake(true);
+      setTimeout(() => setShake(false), 400);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-100 dark:bg-gray-950 flex items-center justify-center px-4 transition-colors">
+      {/* Theme toggle */}
+      <button onClick={toggleDark}
+        className="fixed top-4 right-4 p-2.5 rounded-xl bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors shadow-sm">
+        {isDark ? <IconSun /> : <IconMoon />}
+      </button>
+
+      <div className={`w-full max-w-sm ${shaking ? 'shake' : ''}`}>
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 shadow-lg">
+            <IconDoc />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white leading-tight">H135 Document Reference</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">ระบบฐานข้อมูลเอกสารอ้างอิงองค์กร</p>
+        </div>
+
+        {/* Card */}
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg border border-slate-200 dark:border-gray-800 p-6">
+          <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-5">เข้าสู่ระบบ</h2>
+          <form onSubmit={submit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">รหัสผ่าน</label>
+              <div className="relative">
+                <input
+                  type={show ? 'text' : 'password'}
+                  value={pw}
+                  onChange={e => { setPw(e.target.value); setErr(false); }}
+                  placeholder="กรอกรหัสผ่าน"
+                  autoFocus
+                  className={`w-full bg-slate-50 dark:bg-gray-800 border rounded-xl px-4 py-2.5 pr-10 text-sm
+                    text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600
+                    focus:outline-none focus:ring-2 transition
+                    ${err
+                      ? 'border-red-400 dark:border-red-500 focus:ring-red-400'
+                      : 'border-slate-300 dark:border-gray-700 focus:ring-blue-500 focus:border-blue-500'}`}
+                />
+                <button type="button" onClick={() => setShow(s => !s)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                  {show ? <IconEyeOff /> : <IconEye />}
+                </button>
+              </div>
+              {err && <p className="text-xs text-red-500 dark:text-red-400 mt-1.5">รหัสผ่านไม่ถูกต้อง</p>}
+            </div>
+            <button type="submit"
+              className="w-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm shadow-sm">
+              เข้าสู่ระบบ
+            </button>
+          </form>
+        </div>
+
+        <p className="text-center text-xs text-gray-400 dark:text-gray-700 mt-6">
+          H135 Document Reference System
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+//  SMALL COMPONENTS
+// ─────────────────────────────────────────────────────────────
+function Spinner({ color = 'blue' }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 gap-4">
+      <div className={`w-12 h-12 rounded-full border-4 border-slate-200 dark:border-gray-800 border-t-${color}-500 spin`} />
+      <p className="text-gray-400 dark:text-gray-600 text-sm animate-pulse">กำลังโหลดข้อมูล…</p>
+    </div>
+  );
+}
+
+function Hl({ text, q }) {
+  if (!q || !text) return <>{text}</>;
+  const s = String(text), idx = s.toLowerCase().indexOf(q.toLowerCase());
+  if (idx < 0) return <>{s}</>;
+  return <>{s.slice(0,idx)}<mark className="bg-yellow-300/60 dark:bg-yellow-400/25 text-yellow-800 dark:text-yellow-200 rounded px-0.5">{s.slice(idx,idx+q.length)}</mark>{s.slice(idx+q.length)}</>;
+}
+
+function Badge({ page, cat }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium whitespace-nowrap ${getCatStyle(page, cat)}`}>
+      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70 shrink-0" />
+      {cat}
+    </span>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+//  DOC CARD  (mobile / card view)
+// ─────────────────────────────────────────────────────────────
+function DocCard({ page, doc, search }) {
+  const link    = doc[page.linkKey];
+  const mainCol = page.columns.find(c => c.type === 'main');
+  const numCol  = page.columns.find(c => c.type === 'num');
+  const badgeCol= page.columns.find(c => c.type === 'badge');
+  const metaCols= page.columns.filter(c => c.type !== 'main' && c.type !== 'num' && c.type !== 'badge');
+
+  return (
+    <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-4 space-y-3
+                    hover:border-slate-300 dark:hover:border-gray-700 transition-colors">
+      <div className="flex items-center gap-2 flex-wrap">
+        {badgeCol && <Badge page={page} cat={String(doc[badgeCol.key]||'')} />}
+        {numCol && <span className="text-xs text-gray-400 dark:text-gray-600 tabular-nums">#{doc[numCol.key]}</span>}
+      </div>
+
+      {mainCol && (
+        <p className="text-sm font-medium text-gray-800 dark:text-gray-100 leading-snug">
+          <Hl text={String(doc[mainCol.key]||'')} q={search} />
+        </p>
+      )}
+
+      {metaCols.length > 0 && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          {metaCols.map(col => doc[col.key]
+            ? <span key={col.key} className="text-xs text-gray-500 dark:text-gray-500">
+                <span className="text-gray-400 dark:text-gray-600">{col.label}: </span>
+                <Hl text={String(doc[col.key]||'')} q={search} />
+              </span>
+            : null
+          )}
+        </div>
+      )}
+
+      {link
+        ? <a href={link} target="_blank" rel="noopener noreferrer"
+             className={`flex items-center justify-center gap-1.5 w-full px-3 py-2 rounded-lg ${page.accent.refresh} text-white text-xs font-medium transition-colors`}>
+            <IconOpenDoc /> เปิดเอกสาร
+          </a>
+        : <span className="block text-center text-xs text-gray-400 dark:text-gray-600 py-1">ไม่มีลิ้งค์เอกสาร</span>
+      }
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+//  DOC ROW  (table view)
+// ─────────────────────────────────────────────────────────────
+function DocRow({ page, doc, search }) {
+  const link = doc[page.linkKey];
+  return (
+    <tr className="border-b border-slate-100 dark:border-gray-800/50 hover:bg-slate-50 dark:hover:bg-gray-800/30 transition-colors">
+      {page.columns.map(col => {
+        const val = doc[col.key];
+        if (col.type==='num')    return <td key={col.key} className="py-3 px-3 text-gray-400 dark:text-gray-600 text-sm tabular-nums">{val}</td>;
+        if (col.type==='badge')  return <td key={col.key} className="py-3 px-3"><Badge page={page} cat={String(val||'')} /></td>;
+        if (col.type==='main')   return <td key={col.key} className="py-3 px-3 text-gray-800 dark:text-gray-100 font-medium text-sm leading-snug"><Hl text={String(val||'')} q={search} /></td>;
+        if (col.type==='right')  return <td key={col.key} className="py-3 px-3 text-gray-400 dark:text-gray-500 text-xs text-right whitespace-nowrap tabular-nums">{val||'—'}</td>;
+        if (col.type==='center') return <td key={col.key} className="py-3 px-3 text-gray-400 dark:text-gray-500 text-sm text-center tabular-nums">{val||'—'}</td>;
+        return <td key={col.key} className="py-3 px-3 text-gray-500 dark:text-gray-400 text-sm whitespace-nowrap"><Hl text={String(val||'')} q={search} /></td>;
+      })}
+      <td className="py-3 px-3 text-center">
+        {link
+          ? <a href={link} target="_blank" rel="noopener noreferrer"
+               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${page.accent.refresh} text-white text-xs font-medium transition-colors whitespace-nowrap`}>
+              <IconOpenDoc /> เปิดเอกสาร
+            </a>
+          : <span className="text-gray-300 dark:text-gray-700 text-xs">—</span>
+        }
+      </td>
+    </tr>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+//  PAGE CONTENT
+// ─────────────────────────────────────────────────────────────
+function PageContent({ page, state, upd, onLoad, viewMode, setViewMode }) {
+  const { data, loading, error, search, filter, filter2, sortField, sortDir, lastUpdated } = state;
+
+  const categories = useMemo(() => {
+    if (!data) return [];
+    const seen = new Set();
+    data.forEach(d => { const c = String(d[page.filterKey]||''); if (c) seen.add(c); });
+    return Array.from(seen);
+  }, [data, page.filterKey]);
+
+  const categories2 = useMemo(() => {
+    if (!data || !page.secondaryFilterKey) return [];
+    const seen = new Set();
+    data.forEach(d => { const c = String(d[page.secondaryFilterKey]||''); if (c) seen.add(c); });
+    return Array.from(seen).sort();
+  }, [data, page.secondaryFilterKey]);
+
+  const filtered = useMemo(() => {
+    if (!data) return [];
+    let r = data;
+    if (filter !== 'all') r = r.filter(d => String(d[page.filterKey]||'') === filter);
+    if (filter2 && filter2 !== 'all' && page.secondaryFilterKey)
+      r = r.filter(d => String(d[page.secondaryFilterKey]||'') === filter2);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      r = r.filter(d =>
+        String(d['ชื่อหนังสือ']||'').toLowerCase().includes(q) ||
+        String(d[page.filterKey]||'').toLowerCase().includes(q) ||
+        String(d['Year']||'').includes(q) ||
+        (page.secondaryFilterKey && String(d[page.secondaryFilterKey]||'').toLowerCase().includes(q))
+      );
+    }
+    return [...r].sort((a, b) => {
+      let av = sortField==='ลำดับ' ? (Number(a[sortField])||0) : String(a[sortField]||'').toLowerCase();
+      let bv = sortField==='ลำดับ' ? (Number(b[sortField])||0) : String(b[sortField]||'').toLowerCase();
+      if (av < bv) return sortDir==='asc' ? -1 : 1;
+      if (av > bv) return sortDir==='asc' ?  1 : -1;
+      return 0;
+    });
+  }, [data, filter, filter2, search, sortField, sortDir]);
+
+  const handleSort = field => {
+    if (sortField===field) upd({ sortDir: sortDir==='asc' ? 'desc' : 'asc' });
+    else upd({ sortField: field, sortDir: 'asc' });
+  };
+
+  const SortTh = ({ field, label, align='left' }) => (
+    <th className={`py-3 px-3 text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide cursor-pointer select-none text-${align}`}
+        onClick={() => handleSort(field)}>
+      {label}{' '}
+      <span className={sortField===field ? 'text-blue-500' : 'text-gray-300 dark:text-gray-700'}>
+        {sortField===field ? (sortDir==='asc' ? '↑' : '↓') : '↕'}
+      </span>
+    </th>
+  );
+
+  if (loading) return <Spinner color={page.accent.dot.replace('bg-','').split('-')[0]} />;
+
+  if (error) return (
+    <div className="flex flex-col items-center py-20 gap-4 text-center">
+      <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-500 dark:text-red-400 text-xl font-bold">!</div>
+      <p className="text-red-500 dark:text-red-400">{error}</p>
+      <button onClick={onLoad} className="px-4 py-2 bg-slate-100 dark:bg-gray-800 rounded-lg text-sm hover:bg-slate-200 dark:hover:bg-gray-700 transition-colors">ลองใหม่</button>
+    </div>
+  );
+
+  if (!data) return null;
+
+  const total    = data.length;
+  const shown    = filtered.length;
+  const catCount = cat => data.filter(d => String(d[page.filterKey]||'')===cat).length;
+
+  return (
+    <div className="space-y-4 fade-up">
+      {/* Stats strip */}
+      <div className="flex flex-wrap gap-2 sm:gap-3">
+        <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl px-3 sm:px-4 py-3 flex items-center gap-3 shadow-sm">
+          <div className={`p-1.5 sm:p-2 rounded-lg ${page.accent.statCard}`}>
+            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+              <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+          </div>
+          <div>
+            <p className="text-gray-400 dark:text-gray-500 text-xs uppercase tracking-wider">เอกสารทั้งหมด</p>
+            <p className="text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{total}</p>
+          </div>
+        </div>
+        {categories.map(cat => (
+          <div key={cat} className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl px-3 sm:px-4 py-3 flex items-center gap-2 shadow-sm">
+            <span className={`inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-md text-xs font-medium ${getCatStyle(page, cat)}`}>
+              <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70 hidden sm:block" />
+              <span className="hidden sm:inline">{cat}</span>
+              <span className="sm:hidden">{cat.split(' ')[0]}</span>
+            </span>
+            <span className="text-xl font-bold text-gray-700 dark:text-gray-200 tabular-nums">{catCount(cat)}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Search + Filters */}
+      <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl p-4 space-y-3 shadow-sm">
+        <div className="relative">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500 pointer-events-none"
+               fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+            <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          <input type="text" placeholder="ค้นหาชื่อเอกสาร, ประเภท, ปี…"
+            value={search} onChange={e => upd({ search: e.target.value })}
+            className="w-full bg-slate-50 dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-lg pl-10 pr-9 py-2.5 text-sm
+                       text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600
+                       focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition" />
+          {search && <button onClick={() => upd({ search:'' })}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-lg leading-none">×</button>}
+        </div>
+
+        {/* Primary filter */}
+        <div className="flex flex-wrap gap-1.5">
+          <button onClick={() => upd({ filter:'all' })}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors
+              ${filter==='all' ? 'bg-gray-700 text-white dark:bg-gray-600' : 'bg-slate-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-slate-200 dark:hover:bg-gray-700 border border-slate-200 dark:border-gray-700'}`}>
+            ทั้งหมด <span className="px-1.5 py-0.5 rounded text-xs tabular-nums bg-black/10 dark:bg-gray-700/80">{total}</span>
+          </button>
+          {categories.map(cat => (
+            <button key={cat} onClick={() => upd({ filter:cat })}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors
+                ${filter===cat ? `${getCatStyle(page,cat)} !ring-0` : 'bg-slate-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-slate-200 dark:hover:bg-gray-700 border border-slate-200 dark:border-gray-700'}`}>
+              {cat} <span className="px-1.5 py-0.5 rounded bg-black/10 dark:bg-black/20 tabular-nums">{catCount(cat)}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Secondary filter */}
+        {page.secondaryFilterKey && categories2.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pt-1 border-t border-slate-100 dark:border-gray-800">
+            <span className="text-gray-400 dark:text-gray-600 text-xs self-center mr-1">{page.secondaryFilterKey}:</span>
+            <button onClick={() => upd({ filter2:'all' })}
+              className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors
+                ${(!filter2||filter2==='all') ? 'bg-gray-700 text-white dark:bg-gray-600' : 'bg-slate-100 dark:bg-gray-800 text-gray-500 dark:text-gray-500 hover:bg-slate-200 dark:hover:bg-gray-700 border border-slate-200 dark:border-gray-700'}`}>
+              ทั้งหมด
+            </button>
+            {categories2.map(src => (
+              <button key={src} onClick={() => upd({ filter2:src })}
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors
+                  ${filter2===src ? 'bg-gray-700 text-white dark:bg-gray-600' : 'bg-slate-100 dark:bg-gray-800 text-gray-500 dark:text-gray-500 hover:bg-slate-200 dark:hover:bg-gray-700 border border-slate-200 dark:border-gray-700'}`}>
+                {src}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Results count + view toggle */}
+      <div className="flex items-center justify-between text-sm text-gray-400 dark:text-gray-500 px-0.5">
+        <span>แสดง <span className="text-gray-700 dark:text-gray-300 font-medium tabular-nums">{shown}</span> รายการ
+          {search && <> สำหรับ "<span className="text-blue-500 dark:text-blue-400">{search}</span>"</>}
+        </span>
+        <div className="flex items-center gap-2">
+          {lastUpdated && <span className="text-gray-300 dark:text-gray-700 text-xs hidden sm:inline">อัปเดต {lastUpdated}</span>}
+          {/* View mode toggle */}
+          <div className="flex rounded-lg border border-slate-200 dark:border-gray-700 overflow-hidden">
+            <button onClick={() => setViewMode('table')}
+              className={`p-1.5 transition-colors ${viewMode==='table' ? 'bg-slate-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300' : 'bg-white dark:bg-gray-900 text-gray-400 dark:text-gray-600 hover:bg-slate-100 dark:hover:bg-gray-800'}`}
+              title="Table view">
+              <IconTable />
+            </button>
+            <button onClick={() => setViewMode('card')}
+              className={`p-1.5 transition-colors ${viewMode==='card' ? 'bg-slate-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300' : 'bg-white dark:bg-gray-900 text-gray-400 dark:text-gray-600 hover:bg-slate-100 dark:hover:bg-gray-800'}`}
+              title="Card view">
+              <IconGrid />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Card view */}
+      {viewMode === 'card' && (
+        shown === 0
+          ? <div className="py-16 text-center text-gray-300 dark:text-gray-700">
+              <svg className="w-10 h-10 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+              </svg>
+              ไม่พบเอกสารที่ตรงกับการค้นหา
+            </div>
+          : <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {filtered.map((doc, i) => <DocCard key={doc._idx??i} page={page} doc={doc} search={search} />)}
+            </div>
+      )}
+
+      {/* Table view */}
+      {viewMode === 'table' && (
+        <div className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm">
+          <div className="overflow-x-auto scrollbar-thin">
+            <table className="w-full" style={{minWidth: page.columns.length > 5 ? '800px' : '600px'}}>
+              <thead>
+                <tr className="border-b border-slate-100 dark:border-gray-800 bg-slate-50 dark:bg-gray-900/80">
+                  {page.columns.map(col => (
+                    <SortTh key={col.key} field={col.key} label={col.label}
+                      align={col.type==='right' ? 'right' : col.type==='center' ? 'center' : 'left'} />
+                  ))}
+                  <th className="py-3 px-3 text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide text-center">เปิดเอกสาร</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shown === 0
+                  ? <tr><td colSpan={page.columns.length+1} className="py-16 text-center text-gray-300 dark:text-gray-700">
+                      <svg className="w-10 h-10 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                      </svg>
+                      ไม่พบเอกสารที่ตรงกับการค้นหา
+                    </td></tr>
+                  : filtered.map((doc, i) => <DocRow key={doc._idx??i} page={page} doc={doc} search={search} />)
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+//  MAIN APP
+// ─────────────────────────────────────────────────────────────
+const INIT_STATE = { data:null, loading:false, error:null, search:'', filter:'all', filter2:'all', sortField:'ลำดับ', sortDir:'asc', lastUpdated:null };
+
+function App() {
+  const [isAuth,    setIsAuth]    = useState(() => !!sessionStorage.getItem('h135_auth'));
+  const [isDark,    setIsDark]    = useState(() => localStorage.getItem('h135_theme') !== 'light');
+  const [viewMode,  setViewMode]  = useState(() => typeof window !== 'undefined' && window.innerWidth < 768 ? 'card' : 'table');
+  const [activePage,setActivePage]= useState('flm');
+  const [states,    setStates]    = useState({
+    flm:{...INIT_STATE}, regt:{...INIT_STATE}, formrk:{...INIT_STATE}, handbook:{...INIT_STATE},
+  });
+
+  // Auto-switch to card view on small screen
+  useEffect(() => {
+    const onResize = () => { if (window.innerWidth < 768) setViewMode('card'); };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const toggleDark = () => {
+    const next = !isDark;
+    setIsDark(next);
+    if (next) { document.documentElement.classList.add('dark'); localStorage.setItem('h135_theme','dark'); }
+    else      { document.documentElement.classList.remove('dark'); localStorage.setItem('h135_theme','light'); }
+  };
+
+  const logout = () => { sessionStorage.removeItem('h135_auth'); setIsAuth(false); };
+
+  const upd = useCallback((pid, patch) => {
+    setStates(s => ({ ...s, [pid]: { ...s[pid], ...patch } }));
+  }, []);
+
+  const loadPage = useCallback(pid => {
+    const page = PAGES.find(p => p.id === pid);
+    upd(pid, { loading:true, error:null });
+    if (!IS_GAS) {
+      setTimeout(() => {
+        const raw = applyTypeMap(MOCK[page.sheet] || [], page);
+        upd(pid, { data:raw, loading:false, lastUpdated:stamp() });
+      }, 400);
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(raw => { upd(pid, { data:applyTypeMap(raw,page), loading:false, lastUpdated:stamp() }); })
+      .withFailureHandler(err => { upd(pid, { error:err.message||'เกิดข้อผิดพลาดในการโหลดข้อมูล', loading:false }); })
+      .getSheetData(page.sheet);
+  }, [upd]);
+
+  useEffect(() => { if (isAuth) loadPage('flm'); }, [isAuth]);
+
+  useEffect(() => {
+    if (!isAuth) return;
+    const s = states[activePage];
+    if (!s.data && !s.loading && !s.error) loadPage(activePage);
+  }, [activePage, isAuth]);
+
+  if (!isAuth) return <LoginPage onLogin={() => setIsAuth(true)} isDark={isDark} toggleDark={toggleDark} />;
+
+  const page  = PAGES.find(p => p.id === activePage);
+  const state = states[activePage];
+
+  return (
+    <div className="min-h-screen bg-slate-100 dark:bg-gray-950 pb-12 transition-colors">
+
+      {/* ── Header ── */}
+      <header className="sticky top-0 z-20 bg-white/90 dark:bg-gray-950/90 backdrop-blur-md border-b border-slate-200 dark:border-gray-800/60 shadow-sm dark:shadow-none">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-2 sm:gap-3">
+          {/* Logo */}
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="p-1.5 sm:p-2 bg-blue-600 rounded-lg shrink-0">
+              <IconDoc />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-xs sm:text-sm font-bold leading-tight text-gray-900 dark:text-white truncate">H135 Document Reference</h1>
+              <p className="text-blue-600 dark:text-blue-400 text-xs leading-none hidden sm:block">ระบบฐานข้อมูลเอกสารอ้างอิงองค์กร</p>
+            </div>
+          </div>
+
+          {/* Right actions */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Refresh */}
+            <button onClick={() => loadPage(activePage)} disabled={state.loading}
+              className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2 rounded-lg border border-slate-200 dark:border-gray-800
+                         bg-white dark:bg-gray-900 hover:bg-slate-50 dark:hover:bg-gray-800
+                         text-gray-500 dark:text-gray-400 text-xs transition-colors disabled:opacity-40">
+              <svg className={`w-3.5 h-3.5 ${state.loading ? 'spin' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              </svg>
+              <span className="hidden sm:inline">{state.loading ? 'โหลด…' : 'รีเฟรช'}</span>
+            </button>
+
+            {/* Dark/Light toggle */}
+            <button onClick={toggleDark}
+              className="p-2 rounded-lg border border-slate-200 dark:border-gray-800 bg-white dark:bg-gray-900 hover:bg-slate-50 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors">
+              {isDark ? <IconSun /> : <IconMoon />}
+            </button>
+
+            {/* Logout */}
+            <button onClick={logout}
+              className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-2 rounded-lg border border-slate-200 dark:border-gray-800
+                         bg-white dark:bg-gray-900 hover:bg-red-50 dark:hover:bg-red-900/20
+                         text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400
+                         text-xs transition-colors">
+              <IconLogout />
+              <span className="hidden sm:inline">ออกจากระบบ</span>
+            </button>
+          </div>
+        </div>
+
+        {/* ── Tab navigation ── */}
+        <nav className="max-w-7xl mx-auto px-3 sm:px-6 flex gap-0 overflow-x-auto scrollbar-thin border-t border-slate-100 dark:border-gray-800/40">
+          {PAGES.map(p => {
+            const isActive = p.id === activePage;
+            const cnt = states[p.id].data?.length;
+            return (
+              <button key={p.id} onClick={() => setActivePage(p.id)}
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors
+                  ${isActive ? p.accent.tab : 'border-transparent text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:border-slate-300 dark:hover:border-gray-700'}`}>
+                <span className="sm:hidden">{p.shortLabel}</span>
+                <span className="hidden sm:inline">{p.label}</span>
+                {cnt != null && (
+                  <span className={`px-1.5 py-0.5 rounded text-xs tabular-nums
+                    ${isActive ? 'bg-slate-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300' : 'bg-slate-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600'}`}>
+                    {cnt}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+      </header>
+
+      {/* ── Page Content ── */}
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 mt-4 sm:mt-5">
+        <PageContent
+          key={activePage}
+          page={page}
+          state={state}
+          upd={patch => upd(activePage, patch)}
+          onLoad={() => loadPage(activePage)}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+        />
+      </main>
+
+      <p className="text-center text-gray-300 dark:text-gray-800 text-xs mt-8">
+        H135 Document Reference System • Real-time จาก Google Sheets
+      </p>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
